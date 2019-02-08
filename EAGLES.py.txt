@@ -1,0 +1,371 @@
+import RPi.GPIO as GPIO
+import time
+# Importa las librerias necesarias humedad
+import sys
+import Adafruit_DHT
+#importa librerias necesarias luz
+import smbus
+#librerias base
+from pymongo import MongoClient
+import datetime
+
+
+
+GPIO.setwarnings(False)
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(12, GPIO.OUT)
+GPIO.setup(16, GPIO.OUT)
+GPIO.setup(20, GPIO.OUT)
+GPIO.setup(21, GPIO.OUT)
+
+segundos = 4.75
+x = 0
+y = 0
+client = MongoClient('mongodb://admin:1admin@ds263500.mlab.com:63500/arquitwo')
+db = client['arquitwo']
+
+
+#Variables Globales y Funciones para luz
+
+TSLaddr = 0x39 #0x39 es la direcion por defecto para I2C
+TSLcmd = 0x80 #comando
+chan0 = 0x0C #Lee el canal 0 del sensor data
+chan1 = 0x0E #Lee el canal 1 del sensor data
+TSLon = 0x03 #Enciende el sensor
+TSLoff = 0x00 #Apaga el sensor
+
+#Configuracion de exposicion
+LowLong = 0x02 #x1 Ganancia de 402 milisegundos
+
+
+ 
+
+#Numero de lecturas del sensor
+vRepeat = 20
+
+try:
+    
+    sequence = [LowLong]*vRepeat #repeat reading vRepeat times for setting in []
+except:
+    print("Unknown Exposure Setting used, defaulting to LowLong (x1 402ms")
+    sequence = [LowLong]*vRepeat
+
+
+
+# Generar I2C bus
+bus = smbus.SMBus(1)
+writebyte = bus.write_byte_data
+
+#Encender el sensor
+time.sleep(0.5)
+writebyte(TSLaddr, 0x00 | TSLcmd, TSLon)
+time.sleep(0.5)
+
+def InsertarXplorer(dev_id,sen_id, posX, posY, value):
+    collection = db['XPlorer']
+    collection.insert_one({
+        "Date": datetime.datetime.now(),
+        "Device_ID": dev_id,
+        "Sensor_ID": sen_id,
+        "X": posX,
+        "Y": posY,
+        "Sensor_Value": value
+    })
+
+
+def MOVERX(x):
+        if x == 1:
+                return
+        elif x == 2:
+                ADELANTE(segundos)
+                return
+        elif x == 3:
+                ADELANTE(segundos)
+                ADELANTE(segundos)
+                return
+        elif x == 4:
+                ADELANTE(segundos)
+                ADELANTE(segundos)
+                ADELANTE(segundos)
+                return
+        elif x == 5:
+                ADELANTE(segundos)
+                ADELANTE(segundos)
+                ADELANTE(segundos)
+                ADELANTE(segundos)
+                return
+
+def MOVERY(y):
+        if y == 1:
+                return
+        elif y == 2:
+                ADELANTE(segundos)
+                return
+        elif y == 3:
+                ADELANTE(segundos)
+                ADELANTE(segundos)
+        elif y == 4:
+                ADELANTE(segundos)
+                ADELANTE(segundos)
+                ADELANTE(segundos)
+                return
+        elif y == 5:
+                ADELANTE(segundos)
+                ADELANTE(segundos)
+                ADELANTE(segundos)
+                ADELANTE(segundos)
+                return
+
+def MOVERXATRAS(x):
+        if x == 1:
+                return
+        elif x == 2:
+                ATRAS(segundos)
+                return
+        elif x == 3:
+                ATRAS(segundos)
+                ATRAS(segundos)
+                return
+        elif x == 4:
+                ATRAS(segundos)
+                ATRAS(segundos)
+                ATRAS(segundos)
+                return
+        elif x == 5:
+                ATRAS(segundos)
+                ATRAS(segundos)
+                ATRAS(segundos)
+                ATRAS(segundos)
+                return
+
+def MOVERYATRAS(y):
+        if y == 1:
+                return
+        elif y == 2:
+                ATRAS(segundos)
+                return
+        elif y == 3:
+                ATRAS(segundos)
+                ATRAS(segundos)
+        elif y == 4:
+                ATRAS(segundos)
+                ATRAS(segundos)
+                ATRAS(segundos)
+                return
+        elif y == 5:
+                ATRAS(segundos)
+                ATRAS(segundos)
+                ATRAS(segundos)
+                ATRAS(segundos)
+                return
+            
+def DERECHA(segundos):
+        print('DERECHA')
+        GPIO.output(12, False)
+        GPIO.output(16, True)
+        GPIO.output(20, False)
+        GPIO.output(21, True)
+        time.sleep(segundos)
+        return
+
+def IZQUIERDA(segundos):
+        print('IZQUIERDA')
+        GPIO.output(12, True)
+        GPIO.output(16, False)
+        GPIO.output(20, True)
+        GPIO.output(21, False)
+        time.sleep(segundos)
+        return
+
+def ADELANTE (segundos):
+        print('ADELANTE')
+        GPIO.output(12, True)
+        GPIO.output(16, False)
+        GPIO.output(20, False)
+        GPIO.output(21, True)
+        time.sleep(segundos)
+        return
+
+def ATRAS (segundos):
+        print('ATRAS')
+        GPIO.output(12, False)
+        GPIO.output(16, True)
+        GPIO.output(20, True)
+        GPIO.output(21, False)
+        time.sleep(segundos)
+        return
+
+def DETENER666 ():
+        print('DETENER')
+        GPIO.cleanup()
+
+def DETENER():
+        print('DETENER')
+        GPIO.output(12, False)
+        GPIO.output(16, False)
+        GPIO.output(20, False)
+        GPIO.output(21, False)
+        return
+
+def luxcalc(Result0, Result1):
+    """Basic Lux Calculation value"""
+    #see data sheet for lux calculation details
+    #and to calculate lux correctly for all modes
+    ResDiv = int(Result1)/int(Result0)
+    if ResDiv <= 0.52:
+        lux = 0.0315 * Result0 - 0.0593 * Result0 * ((ResDiv)**1.4)
+    elif ResDiv > 0.52 and ResDiv <= 0.65:
+        lux = 0.0229 *Result0 - 0.0291 * Result1
+    elif ResDiv > 0.65 and ResDiv <= 0.8:
+        lux = 0.0157 * Result0 - 0.0180 * Result1
+    elif ResDiv > 0.8 and ResDiv <= 1.3:
+        lux = 0.00338 * Result0 - 0.00260 * Result1
+    elif ResDiv > 1.3:
+        lux = 0
+    return lux
+
+
+
+
+
+
+
+def humedad():
+    # Configuracion del tipo de sensor DHT
+    sensor = Adafruit_DHT.DHT11
+
+    # Configuracion del puerto GPIO al cual esta conectado  (GPIO 23)
+    pin = 23
+
+    # Intenta ejecutar las siguientes instrucciones, si falla va a la instruccion except
+    try:
+        # Ciclo principal infinito
+        while True:
+            # Obtiene la humedad y la temperatura desde el sensor
+            humedad, temperatura = Adafruit_DHT.read_retry(sensor, pin)
+            chumedad='Temperatura={0:0.1f}*  Humedad={1:0.1f}%'.format(temperatura, humedad)
+
+            # retorna las variables temperatura y humedad con un decimal de manera de un solo string
+            return chumedad
+
+
+
+
+    # Se ejecuta en caso de que falle alguna instruccion dentro del try
+    except Exception:
+        # Imprime en pantalla el error e
+        return (e)
+
+def luz():
+
+    for item in sequence:
+        if item != 3 and item != 19: #Selected built in delay for exposure. If Manual  mode not set (0x03 or 0x13)
+            writebyte(TSLaddr, 0x01 | TSLcmd, item)
+            #Give sensor time to write results before collecting reading.
+            #13.7ms  write several readings before sleep complete, 402ms would write once at 0.5sec sleep.
+            time.sleep(0.5)
+        else: #use manual exposure
+            manual(ManDelay,item)
+
+        #Read Ch0 Word
+        data = bus.read_i2c_block_data(TSLaddr, chan0 | TSLcmd, 2)
+        #Read CH1 Word
+        data1 = bus.read_i2c_block_data(TSLaddr, chan1 | TSLcmd, 2)
+        # Convert the data to Integer
+        ch0 = data[1] * 256 + data[0]
+        ch1 = data1[1] * 256 + data1[0]
+
+        # Output data to screen
+        
+        if ch0 > 0 and ch1 > 0:
+            vLux = round(luxcalc(ch0, ch1),5)
+            #print("Cantidad de Lux en el area:",vLux)
+            return vLux
+        else:
+            #either no light or clipping value exceeded due to too much light
+           # print("No  hay luz")
+            return "Sin luz"
+
+    #Power Off
+    writebyte(TSLaddr, 0x00 | TSLcmd, TSLoff)
+
+def getPosToMove():
+    collection = db["Pic"]
+    listx = []
+    listxpos = []
+    listy = []
+    listypos = []
+    result = []
+
+    for i in collection.find():
+        if(i['X'] == 0):
+            listy.append(i['Escala'])
+            listypos.append(i['Y'])
+
+        if (i['Y'] == 0):
+            listx.append(i['Escala'])
+            listxpos.append(i['X'])
+
+    posX = listxpos[listx.index(max(listx))]
+    posY = listypos[listy.index(max(listy))]
+    result.append(posX)
+    result.append(posY)
+    return result
+
+def Ssensors(x,y):
+    Cuantasveces = 0
+    f=60 #esto obliga a que se haga durande 2 minutos  2min=120seg 120(total)/2(sleep)=60
+    print('se inicia el escaneo:')
+    while f>0: #arreglar true
+        Sensor1=str(luz())
+        Sensor2=humedad()
+        Temperatura=Sensor2[12:16]
+        Humedad=Sensor2[27:31]
+        Luz=Sensor1[0:5]
+        InsertarXplorer(6,1,x,y,Temperatura)
+        InsertarXplorer(6,2,x,y,Humedad)
+        InsertarXplorer(6,3,x,y,Luz)
+        print('Temperatura: ' + Temperatura + ', Humedad: ' + Humedad + ', Luz: ' + Luz)
+        #duerme 0.5 segundos se realiza cada 2 debido que el sensor de luz utiliza 1.5 segundos para poder obtener correctamente la medida
+        time.sleep(0.5)
+        f=f-1
+        Cuantasveces = Cuantasveces + 1
+    print(Cuantasveces)
+    return
+
+def INICIAR():
+        matriz = getPosToMove()
+        print(matriz[0])
+        print(matriz[1])
+        x = int(matriz[0]);
+        y = int(matriz[1]);
+        
+        #x = int(input('ingrese un numero'));
+        #y = int(input('ingrese un numero'));
+
+        # IZQUIERDA(0.55) #Empezar en X
+        MOVERX(x)      #Me muevo n espacios en X
+        DERECHA(0.79)     #Girar y moverme en Y
+        #DETENER()
+        #time.sleep(5)
+        MOVERY(y)      #Me muevo n espacios en
+        DETENER()
+        #time.sleep(5)
+        
+        Ssensors(x,y)
+
+        #DERECHA(1.58)    #Doy una vuelta 180 para iniciar a 
+        MOVERYATRAS(y)      #Regreso los n espacios en Y
+        #DETENER()
+        #time.sleep(5)
+        IZQUIERDA(0.79)   #Giro al lado contrario para movereme en X
+        #DETENER()
+        #time.sleep(5)
+        MOVERXATRAS(x)      #Regreso los n espacios en X
+        #DERECHA(0.55)   #Giro al lado contrario para salirme de la matriz
+        DETENER()
+        return 
+
+DETENER()
+INICIAR()
+
